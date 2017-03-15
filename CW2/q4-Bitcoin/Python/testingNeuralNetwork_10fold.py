@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 def buildModel(NIL,NHL,NOL):
 
     # Initialize matrices and arrays to random values
-    np.random.seed(0) # For testing purposes
+    # np.random.seed(0) # For testing purposes
     W1 = np.random.randn(NHL, NIL) / np.sqrt(NIL)
     c1 = np.zeros((NHL,1))
     W2 = np.random.randn(NOL, NHL) / np.sqrt(NHL)
@@ -123,34 +123,14 @@ if __name__ == '__main__':
     bid = bid.astype(np.float)
     bid = bid[np.argsort(ID)]
 
-    # Comment out the statements with np.argsort to see the impact
-    # plt.plot(ID,price,  label = 'Bitcoin Price Data')
-    # plt.legend(loc='upper right')
-    # plt.xlabel('Transaction ID')
-    # plt.ylabel('Price')
-    # plt.show()
-
-    # Different definition of if the price went up.
-    # 1. Firstly if the next transaction value is higher on lower
-    # Not very useful in terms of understanding anything because of financial fluctuations
-    N = np.size(price)
-    D1 = price[1:N] - price[:N-1] # Level 1 different in price
-    priceUp1 = np.ones(N-1)
-    priceUp1[D1 < 0] = 0 # I.e. if the price went up or down
-    # 2. See if the average price in the next avgSize transactions is higher or lower
+    N = len(price) # Set N
+    # See if the average price in the next avgSize transactions is higher or lower
     avgSize = 50 # Chosen arbitarily
     movingAvg = moving_average(price, avgSize)
     ND = avgSize
     D = movingAvg[ND:] - movingAvg[:-ND]
     priceUp = np.ones(N-ND)
     priceUp[D < 0] = 0
-    # Plot to visualize
-    # plt.plot(ID,price, label = 'Bitcoin Price Data')
-    # plt.plot(ID,movingAvg, '--r', label='Moving Average (50 Transaction)')
-    # plt.legend(loc='upper right')
-    # plt.xlabel('Transaction ID')
-    # plt.ylabel('Price')
-    # plt.show()
 
     Ntau = 100
     dim_X = 2
@@ -163,38 +143,31 @@ if __name__ == '__main__':
     NHL = NIL
     NOL = 2 # output layer size
 
-    # Initialize matrices and vectors for the model
-    model = buildModel(NIL,NHL,NOL)
+    perfs = np.array([])
+    K_fold = 10
+    # Set number of values in each fold
+    N_samples = (N - Ntau - avgSize) / K_fold
+    for K in range(K_fold):
+        # Initialize matrices and vectors for the model
+        model = buildModel(NIL,NHL,NOL)
 
-    # Basic testing if trained on roughly half the values is prediction on the
-    # rest of the data set
-    model = trainVals(model, Ntau,10000)
-    print testVals(model, Ntau+10000, N-2*Ntau-10000)
-
-    # # Iterative cross validation but without randomness dealt with.
-    N_samples = 4000
-    N_runs = N / N_samples
-    # Train model on intial data set
-    model = trainVals(model, Ntau, N_samples)
-    # Store model performance in each validation set
-    performance = np.array([])
-    # Test model on the next N_sample values then train and repeat
-    for run in range(1,N_runs):
-        if run == N_runs: # Make sure all values are tested in the last batch
-            N_samples += N - N_runs * N_samples
-        # Compute perforamance
-        performance = np.append(performance, testVals(model, Ntau + run*N_samples , N_samples) )
-        if run != N_runs: # If not the last run then train the model further
-            model = trainVals(model, Ntau + run*N_samples, N_samples)
-    print performance
-    print np.average(performance)
+        # Train model on 9 of the 10 data sets
+        for run in np.random.permutation(K_fold):
+            if run != K:
+                model = trainVals(model, Ntau + run * N_samples, N_samples)
+        # Test on the Kth data set
+        performance = testVals(model, Ntau + K * N_samples , N_samples)
+        perfs = np.append(perfs, performance)
+    print perfs
+    print np.average(perfs)
 
     plt.figure()
     plt.plot(ID,price)
-    for run in range(1,N_runs):
-        midval = run*N_samples+ N_samples/10
-        plt.annotate( str( performance[run-1]) , ( ID[midval], 680))
-        plt.plot((ID[run*N_samples], ID[run*N_samples]), (610, 690), 'k-')
+    for K in range(K_fold):
+        midval = K*N_samples+ N_samples / 10
+        plt.annotate( str.format('{0:.3f}', perfs[K] ) , ( ID[midval], 680))
+        plt.plot((ID[K*N_samples], ID[K*N_samples]), (610, 690), 'k-')
+    plt.plot((ID[N-1], ID[N-1]), (610, 690), 'k-')
     plt.xlabel('Transaction ID')
     plt.ylabel('Price')
     plt.show()
