@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 def buildModel(NIL,NHL,NOL):
 
     # Initialize the parameters to random values. We need to learn these.
-    np.random.seed(0)
+    # np.random.seed(0)
     W1 = np.random.randn(NHL, NIL) / np.sqrt(NIL)
     c1 = np.zeros((NHL,1))
     W2 = np.random.randn(NOL, NHL) / np.sqrt(NHL)
@@ -14,40 +14,7 @@ def buildModel(NIL,NHL,NOL):
     return { 'W1': W1, 'c1': c1, 'W2': W2, 'c2': c2}
 ########################################################################
 
-# def forwardPropogate(model, X):
-#     W1, c1, W2, c2 = model['W1'], model['c1'], model['W2'], model['c2']
-#     # Forward propagation
-#     u1 = W1.dot(X) + c1
-#     v1 = np.tanh(u1)
-#     u2 = W2.dot(v1) + c2
-#     exp_scores = np.exp(u2)
-#     return exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
-# ########################################################################
-#
-# def backPropogate(model, y, probs):
-#     W1, c1, W2, c2 = model['W1'], model['c1'], model['W2'], model['c2']
-#     # Backpropagation
-#     delta3 = probs - y.T
-#     # delta3[range(NX), y] -= 1
-#     dW2 = (v1.T).dot(delta3)
-#     dc2 = np.sum(delta3, axis=0, keepdims=True)
-#     delta2 = delta3.dot(W2.T) * (1 - np.power(v1, 2))
-#     dW1 = np.dot(X.T, delta2)
-#     dc1 = np.sum(delta2, axis=0)
-#
-#     # Add regularization terms (c1 and c2 don't have regularization terms)
-#     dW2 += eps2 * W2
-#     dW1 += eps2 * W1
-#
-#     # Gradient descent parameter update
-#     W1 += -eps1 * dW1
-#     c1 += -eps1 * dc1
-#     W2 += -eps1 * dW2
-#     c2 += -eps1 * dc2
-#     return { 'W1': W1, 'c1': c1, 'W2': W2, 'c2': c2}
-########################################################################
-
-def trainModel(model, X, y, repeats = 100):
+def trainModel(model, X, y, repeats = 1):
     W1, c1, W2, c2 = model['W1'], model['c1'], model['W2'], model['c2']
     # Compute solution and then propogate error back
     for i in range(repeats):
@@ -57,26 +24,17 @@ def trainModel(model, X, y, repeats = 100):
         u2 = W2.dot(v1) + c2
         exp_scores = np.exp(u2)
         probs = exp_scores / np.sum(exp_scores)
-        # print np.shape(probs), np.shape(y)
         # Backpropagation
         delta3 = probs - y
-        # print probs
-        # print delta3
-        # delta3[range(NX), y] -= 1
-        # dW2 = (v1.T).dot(delta3)
         dW2 = delta3.dot(v1.T)
         dc2 = np.sum(delta3)
-        # delta2 = delta3.dot(W2.T) * (1 - np.power(v1, 2))
         delta2 = (W2.T).dot(delta3) * (1 - np.power(v1, 2))
-        # dW1 = np.dot(X.T, delta2)
         dW1 = np.dot(delta2,X.T)
-        dc1 = np.sum(delta2, axis=0)
-
-        # Add regularization terms (c1 and c2 don't have regularization terms)
+        dc1 = np.sum(delta2)
+        # Compute level of error to add
         dW2 += eps2 * W2
         dW1 += eps2 * W1
-
-        # Gradient descent parameter update
+        # Add Error to the model matrices/arrays
         W1 += -eps1 * dW1
         c1 += -eps1 * dc1
         W2 += -eps1 * dW2
@@ -98,9 +56,13 @@ def predict(model, X):
 def moving_average(x, n) :
     ret = np.cumsum(x, dtype=float)
     ret[n:] = ret[n:] - ret[:-n]
-    return ret[n - 1:] / n
+    for i in range(n-1):
+        ret[i] /= (i+1)
+    ret[n - 1:] /= n
+    return ret
 # Cite: http://stackoverflow.com/users/110026/jaime
 ########################################################################
+
 def testResult(model, Xtest, ytest):
 # Specefic to this situation. Can be changed for different models
     probs = predict(model, Xtest)
@@ -108,16 +70,15 @@ def testResult(model, Xtest, ytest):
         return 1
     else:
         return 0
-
 ########################################################################
 def trainVals(model, start, num):
     for i in range(start, start+num):
-        Xt = np.array([price[i], bid[i]])
-        for j in range(Ntau-1):
-            Xt = np.append(Xt,[price[i-j], bid[i-j]])
-        Xt = Xt.reshape((NX,1))
+        vals = np.arange(i-Ntau+1,i+1) # indices of prices of interest
+        Xt = np.array([price[vals].T, bid[vals].T])
+        Xt = Xt.reshape(NIL,1) # Make into a vector
         yt = np.array([priceUp[i], 1 - priceUp[i]]) # Vector of [up, down] booleans
         yt = yt.reshape((2,1))
+        # Train the model of this value
         model = trainModel(model, Xt, yt)
 
     return model
@@ -126,14 +87,14 @@ def trainVals(model, start, num):
 def testVals(model, start, num):
     correct = 0
     for i in range(start, start+num):
-        Xt = np.array([price[i], bid[i]])
-        for j in range(Ntau-1):
-            Xt = np.append(Xt,[price[i-j], bid[i-j]])
-        Xt = Xt.reshape((NX,1))
+        vals = np.arange(i-Ntau+1,i+1)  # indices of prices of interest
+        Xt = np.array([price[vals].T, bid[vals].T])
+        Xt = Xt.reshape(NIL,1)  # Make into a vector
         yt = np.array([priceUp[i], 1 - priceUp[i]]) # Vector of [up, down] booleans
         yt = yt.reshape((2,1))
+        # Compute if the result is correct
         correct += testResult(model, Xt, yt)
-    return correct / float(num)
+    return correct / float(num) # Return % of correct values
 
 ########################################################################
 if __name__ == '__main__':
@@ -162,8 +123,11 @@ if __name__ == '__main__':
     bid = bid.astype(np.float)
     bid = bid[np.argsort(ID)]
 
-    # Comment out sorting to see the impact
-    # plt.plot(ID,price)
+    # Comment out the statements with np.argsort to see the impact
+    # plt.plot(ID,price,  label = 'Bitcoin Price Data')
+    # plt.legend(loc='upper right')
+    # plt.xlabel('Transaction ID')
+    # plt.ylabel('Price')
     # plt.show()
 
     # Different definition of if the price went up.
@@ -173,45 +137,64 @@ if __name__ == '__main__':
     D1 = price[1:N] - price[:N-1] # Level 1 different in price
     priceUp1 = np.ones(N-1)
     priceUp1[D1 < 0] = 0 # I.e. if the price went up or down
-    # 2. See if the tranction value a certain number away is higher or lower
-    # Still not 100% reasonable due to financial fluctuations
-    forecastDepth = 50 # Chosen arbitarily
-    D = price[forecastDepth:N] - price[:N-forecastDepth] # Level 1 different in price
-    priceUp = np.ones(N-forecastDepth)
-    priceUp[D < 0] = 0# I.e. if the price went up or down in
-    # 3. See if the average price in the next avgSize transactions is higher or lower
+    # 2. See if the average price in the next avgSize transactions is higher or lower
     avgSize = 50 # Chosen arbitarily
     movingAvg = moving_average(price, avgSize)
-    D = movingAvg - price[:N-avgSize+1]
-    priceUp = np.ones(N-avgSize+1)
+    ND = avgSize
+    D = movingAvg[ND:] - movingAvg[:-ND]
+    priceUp = np.ones(N-ND)
     priceUp[D < 0] = 0
     # Plot to visualize
-    # plt.plot(ID,price)
-    # plt.plot(ID[avgSize-1:],movingAvg,'--')
+    # plt.plot(ID,price, label = 'Bitcoin Price Data')
+    # plt.plot(ID,movingAvg, '--r', label='Moving Average (50 Transaction)')
+    # plt.legend(loc='upper right')
+    # plt.xlabel('Transaction ID')
+    # plt.ylabel('Price')
     # plt.show()
 
-    Ntau = 10
+    Ntau = 100
     dim_X = 2
     NX = Ntau * dim_X
-    index = Ntau
-    Xtrain = np.array([price[index], bid[index]])
-    for i in range(Ntau-1):
-        Xtrain = np.append(Xtrain,[price[index-i], bid[index-i]])
-    Xtrain = Xtrain.reshape((NX,1))
-
-    ytrain = np.array([priceUp[index], 1 - priceUp[index]]) # Vector of [up, down] booleans
-    ytrain = ytrain.reshape((2,1))
-    # print np.argsort([0,1])
-    NX = len(Xtrain) # training set size
 
     # Parameters for Neural Network
-    eps1 = 1e-3 # learning rate (chosen)
-    eps2 = 1e-3 # regularization strength (chosen)
-    NIL = NX # input layer dimensionality
-    NHL = 20
-    NOL = 2 # output layer dimensionality
+    eps1 = 1e-8 # learning rate (chosen)
+    eps2 = 1e-8 # regularization strength (chosen)
+    NIL = NX # input layer size
+    NHL = NIL
+    NOL = 2 # output layer size
 
+    # Initialize matrices and vectors for the model
     model = buildModel(NIL,NHL,NOL)
-    # model = trainModel(model, Xtrain, ytrain)
-    model = trainVals(model, Ntau,10000)
-    print testVals(model, Ntau, 8000)
+
+    # Basic testing if trained on roughly half the values is prediction on the
+    # rest of the data set
+    # model = trainVals(model, Ntau,10000)
+    # print testVals(model, Ntau+10000, N-2*Ntau-10000)
+
+    # Iterative cross validation:
+    N_samples = 1000
+    N_runs = N / N_samples
+    # Train model on intial data set
+    model = trainVals(model, Ntau, N_samples)
+    # Store model performance in each validation set
+    performance = np.array([])
+    # Test model on the next N_sample values then train and repeat
+    for run in range(1,N_runs):
+        if run == N_runs: # Make sure all values are tested in the last batch
+            N_samples += N - N_runs * N_samples
+        # Compute perforamance
+        performance = np.append(performance, testVals(model, Ntau + run*N_samples , N_samples) )
+        if run != N_runs: # If not the last run then train the model further
+            model = trainVals(model, Ntau + run*N_samples, N_samples)
+    print performance
+    print np.average(performance)
+
+    plt.figure()
+    plt.plot(ID,price)
+    for run in range(1,N_runs):
+        midval = run*N_samples+ N_samples/10
+        plt.annotate( str( performance[run-1]) , ( ID[midval], 680))
+        plt.plot((ID[run*N_samples], ID[run*N_samples]), (610, 690), 'k-')
+    plt.xlabel('Transaction ID')
+    plt.ylabel('Price')
+    plt.show()
